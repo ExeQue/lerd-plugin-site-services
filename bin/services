@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+# The services a site uses, each with the description of the preset or custom
+# service file it was installed from, and the mark lerd draws for it.
+import json
+import os
+import re
+import urllib.request
+
+
+def api(path):
+    req = urllib.request.Request(
+        os.environ["LERD_API_URL"] + path,
+        headers={"X-Lerd-Plugin-Token": os.environ["LERD_API_TOKEN"]},
+    )
+    return json.load(urllib.request.urlopen(req))
+
+
+def custom_description(name):
+    # ponytail: a regex for the top-level key, not a YAML parser.
+    path = os.path.expanduser(f"~/.config/lerd/services/{name}.yaml")
+    try:
+        text = open(path).read()
+    except OSError:
+        return ""
+    match = re.search(r"^description:\s*(['\"]?)(.*?)\1\s*$", text, re.M)
+    return match.group(2) if match else ""
+
+
+def service_domains():
+    # The API leaves out the domain nginx serves a service on; lerd keeps it in
+    # its config as services.<name>.domain.
+    # ponytail: a regex over the indented block, not a YAML parser.
+    try:
+        text = open(os.path.expanduser("~/.config/lerd/config.yaml")).read()
+    except OSError:
+        return {}
+    return dict(re.findall(r"^    ([\w-]+):\n(?:        .*\n)*?        domain: (\S+)", text, re.M))
+
+
+# The site's own list, not a service's site_domains: that misses services a site
+# reaches by domain (https://umami.test) instead of by container host.
+site = next((s for s in api("/api/sites") if s.get("name") == os.environ.get("LERD_SITE")), {})
+used = set(site.get("services") or [])
+presets = {p["name"]: p.get("description", "") for p in api("/api/services/presets")}
+# Already sanitized by lerd, keyed by preset name.
+icons = api("/api/services/icons")
+domains = service_domains()
+
+services = []
+for s in api("/api/services"):
+    if s["name"] not in used:
+        continue
+    preset = s.get("preset") or s["name"]
+    description = presets.get(preset) or custom_description(s["name"])
+    # Presets put a default login in their description as "(login: ...)".
+    login = re.search(r"\s*\(login:\s*(.+?)\)", description)
+    services.append({
+        "name": s["name"],
+        "status": s.get("status", ""),
+        "category": s.get("category", ""),
+        "color": s.get("color", ""),
+        # ponytail: lerd secures every service domain it serves, so always https.
+        "address": f"https://{domains[s['name']]}" if s["name"] in domains
+        else f"localhost:{s['port']}" if s.get("port") else "",
+        "icon": icons.get(preset, ""),
+        "description": description.replace(login.group(0), "") if login else description,
+        "login": login.group(1) if login else "",
+    })
+
+if os.environ.get("LERD_SURFACE") == "mcp":
+    # The logo and colour only draw the tab; an assistant reads the rest.
+    for s in services:
+        del s["icon"], s["color"]
+
+print(json.dumps(services))

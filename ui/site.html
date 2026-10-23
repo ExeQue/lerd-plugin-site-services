@@ -1,0 +1,208 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Services</title>
+  <style>
+    .head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+    .svc { display: flex; flex-direction: column; padding: 0; overflow: hidden; margin: 0; }
+    .body { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; flex: 1; }
+    .title { display: flex; align-items: center; gap: 12px; }
+    .name { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .name strong { font-size: 14px; }
+    .category { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .mark {
+      position: relative; width: 36px; height: 36px; flex-shrink: 0; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px;
+      color: var(--c); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent);
+      background: color-mix(in srgb, var(--c) 13%, transparent);
+    }
+    /* The logo is drawn as a mask, so it takes the service's colour like lerd's own. */
+    .mark i { position: absolute; inset: 6px; background: var(--c); mask: var(--icon) center / contain no-repeat; }
+    /* Brand colours are picked for white; lift them so they read on a dark card. */
+    :root.dark .mark i { background: color-mix(in srgb, var(--c) 65%, white); }
+    .description { margin: 0; line-height: 1.5; }
+    .login { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--lerd-line); border-radius: 6px; }
+    .login .category { margin-right: 2px; }
+    .value { display: inline-flex; align-items: center; gap: 2px; min-width: 0; }
+    .value code { user-select: all; cursor: text; overflow-wrap: anywhere; }
+    .copy {
+      display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+      width: 22px; height: 22px; padding: 0; border: 0; background: none; color: var(--lerd-text-muted);
+    }
+    .copy:hover:not(:disabled) { background: var(--lerd-surface-hover); color: var(--lerd-text); }
+    .copy.done { color: var(--lerd-ok); }
+    .copy svg { width: 13px; height: 13px; }
+    .foot { display: flex; align-items: center; padding: 7px 16px; border-top: 1px solid var(--lerd-line); background: var(--lerd-surface-hover); }
+    :root.dark .foot { background: rgba(0, 0, 0, 0.18); }
+  </style>
+</head>
+<body>
+  <div class="head">
+    <span class="lerd-label">Services</span>
+    <span id="summary" class="lerd-muted"></span>
+  </div>
+  <div id="list" class="grid"><div class="lerd-empty">Loading...</div></div>
+  <script src="lerd.js"></script>
+  <script>
+    const list = document.getElementById('list');
+    const summary = document.getElementById('summary');
+    const pills = { active: ['ok', 'Running'], inactive: ['warn', 'Stopped'], failed: ['bad', 'Failed'] };
+
+    // The frame has no clipboard permission of its own, so the Clipboard API may
+    // refuse; execCommand on a selection still copies from a click.
+    async function copy(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        const area = el('textarea');
+        area.value = text;
+        document.body.append(area);
+        area.select();
+        const ok = document.execCommand('copy');
+        area.remove();
+        return ok;
+      }
+    }
+
+    // Stroke icons in currentColor, so they follow the theme.
+    const ICONS = {
+      copy: ['M8 8h12v12H8z', 'M16 8V4H4v12h4'],
+      check: ['M5 12l5 5L20 7'],
+    };
+
+    function icon(name) {
+      const ns = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(ns, 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor');
+      svg.setAttribute('stroke-width', '2');
+      svg.setAttribute('stroke-linecap', 'round');
+      svg.setAttribute('stroke-linejoin', 'round');
+      svg.setAttribute('aria-hidden', 'true');
+      for (const d of ICONS[name]) {
+        const path = document.createElementNS(ns, 'path');
+        path.setAttribute('d', d);
+        svg.append(path);
+      }
+      return svg;
+    }
+
+    // The label names what is copied ("Copy password") without reading a secret
+    // out to a screen reader.
+    function copyButton(text, label) {
+      const button = el('button', 'copy');
+      button.type = 'button';
+      button.title = label;
+      button.setAttribute('aria-label', label);
+      button.append(icon('copy'));
+      button.addEventListener('click', async () => {
+        const ok = await copy(text);
+        button.replaceChildren(icon(ok ? 'check' : 'copy'));
+        button.classList.toggle('done', ok);
+        button.title = ok ? 'Copied' : 'Click the text to select it instead';
+        setTimeout(() => {
+          button.replaceChildren(icon('copy'));
+          button.classList.remove('done');
+          button.title = label;
+        }, 1500);
+      });
+      return button;
+    }
+
+    // A value that selects whole on a click, with its copy button right after it.
+    function value(text, label, className = 'lerd-mono') {
+      const node = el('span', 'value');
+      node.append(el('code', className, text), copyButton(text, label));
+      return node;
+    }
+
+    function el(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text != null) node.textContent = text;
+      return node;
+    }
+
+    // A mark too dark or too light for the theme falls back to the text colour.
+    function markColor(hex) {
+      const m = /^#([0-9a-f]{6})$/i.exec(hex || '');
+      if (!m) return 'var(--lerd-text-muted)';
+      const n = parseInt(m[1], 16);
+      const lum = (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+      const dark = document.documentElement.classList.contains('dark');
+      return (dark ? lum < 0.25 : lum > 0.8) ? 'var(--lerd-text)' : hex;
+    }
+
+    function mark(s) {
+      const node = el('div', 'mark');
+      node.style.setProperty('--c', markColor(s.color));
+      if (s.icon) {
+        // lerd sanitized the SVG; as a mask's data URI it never becomes markup here.
+        const icon = el('i');
+        icon.style.setProperty('--icon', 'url("data:image/svg+xml,' + encodeURIComponent(s.icon) + '")');
+        node.append(icon);
+      } else {
+        node.textContent = s.name.charAt(0).toUpperCase();
+      }
+      return node;
+    }
+
+    function card(s) {
+      const [tone, label] = pills[s.status] || ['', s.status];
+      const name = el('div', 'name');
+      name.append(el('strong', '', s.name));
+      if (s.category) name.append(el('span', 'category lerd-muted', s.category));
+      const title = el('div', 'title');
+      title.append(mark(s), name, el('span', 'lerd-pill ' + tone, label));
+
+      const body = el('div', 'body');
+      body.append(title, el('p', 'description', s.description || 'No description.'));
+      if (s.login) {
+        const login = el('div', 'login');
+        login.append(el('span', 'category lerd-muted', 'Login'));
+        // "user / password": each part selects on its own.
+        const parts = s.login.split(' / ');
+        if (parts.length === 2) {
+          login.append(value(parts[0], 'Copy user'), el('span', 'lerd-muted', '/'), value(parts[1], 'Copy password'));
+        } else {
+          login.append(value(s.login, 'Copy login'));
+        }
+        body.append(login);
+      }
+
+      const svc = el('article', 'lerd-card svc');
+      svc.append(body);
+      if (s.address) {
+        const foot = el('div', 'foot');
+        foot.append(value(s.address, 'Copy address', 'lerd-mono lerd-muted'));
+        svc.append(foot);
+      }
+      return svc;
+    }
+
+    function render(services) {
+      list.replaceChildren();
+      if (!services.length) {
+        list.append(el('div', 'lerd-empty', 'This site uses no lerd services.'));
+        return;
+      }
+      const running = services.filter((s) => s.status === 'active').length;
+      summary.textContent = services.length + ' used by ' + lerd.context.site + ' · '
+        + (running === services.length ? 'all running' : running + ' running');
+      services.forEach((s) => list.append(card(s)));
+    }
+
+    let services = [];
+    lerd.api('services?site=' + encodeURIComponent(lerd.context.site))
+      .then((text) => { services = JSON.parse(text); render(services); })
+      .catch((err) => { list.replaceChildren(el('div', 'lerd-empty', err.message)); });
+
+    // theme.js flips :root.dark when the dashboard's theme changes; the marks follow.
+    new MutationObserver(() => render(services)).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+  </script>
+</body>
+</html>
