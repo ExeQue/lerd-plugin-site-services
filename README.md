@@ -1,6 +1,6 @@
 # Site Services
 
-A [lerd](https://lerd.sh) plugin that adds a **Services** tab to every site, listing the services the site uses with their logo, status, description, default login and address. The same list is available to AI assistants through the MCP tool `site-services_list`.
+A [lerd](https://lerd.sh) plugin that adds a **Services** tab to every site, listing the services the site uses with their logo, name, status, description, default login and address. The same list is available to AI assistants through the MCP tool `site-services_list`.
 
 ![The Services tab](docs/tab.png)
 
@@ -15,9 +15,7 @@ Reload the dashboard and open a site's **Services** tab. See [DOCS.md](DOCS.md) 
 ## What it adds, reads and changes
 
 - **Adds** a site tab (**Services**), an API endpoint (`services`) that the tab calls, and an MCP tool (`site-services_list`). Both run the same script, `bin/services`.
-- **Reads** Lerd's own API on the machine, with the token Lerd gives the plugin: `/api/sites`, `/api/services`, `/api/services/presets` and `/api/services/icons`. It also reads two files Lerd keeps, without changing them:
-  - `~/.config/lerd/services/<name>.yaml`, for a custom service's `description`, which the API does not report.
-  - `~/.config/lerd/config.yaml`, for the domain a service is served on, which the API does not report either ([lerd-env/lerd#2300](https://github.com/lerd-env/lerd/issues/2300) asks for both in the API; the plugin will switch to it once it is there).
+- **Reads** Lerd's own API on the machine, with the token Lerd gives the plugin: `/api/sites`, `/api/services` (with each service's `label` and `domain`), `/api/services/presets` and `/api/services/icons`. It also reads `~/.config/lerd/services/<name>.yaml` for a custom service's `description`, which the API does not report, without changing it.
 - **Changes** nothing: no files, no settings, no services.
 - **Sends** nothing over the network. Every request goes to Lerd on the same machine.
 

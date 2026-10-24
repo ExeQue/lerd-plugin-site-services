@@ -26,41 +26,34 @@ def custom_description(name):
     return match.group(2) if match else ""
 
 
-def service_domains():
-    # The API leaves out the domain nginx serves a service on; lerd keeps it in
-    # its config as services.<name>.domain.
-    # ponytail: a regex over the indented block, not a YAML parser.
-    try:
-        text = open(os.path.expanduser("~/.config/lerd/config.yaml")).read()
-    except OSError:
-        return {}
-    return dict(re.findall(r"^    ([\w-]+):\n(?:        .*\n)*?        domain: (\S+)", text, re.M))
-
-
 # The site's own list, not a service's site_domains: that misses services a site
 # reaches by domain (https://umami.test) instead of by container host.
 site = next((s for s in api("/api/sites") if s.get("name") == os.environ.get("LERD_SITE")), {})
 used = set(site.get("services") or [])
-presets = {p["name"]: p.get("description", "") for p in api("/api/services/presets")}
+presets = {p["name"]: p for p in api("/api/services/presets")}
 # Already sanitized by lerd, keyed by preset name.
 icons = api("/api/services/icons")
-domains = service_domains()
 
 services = []
 for s in api("/api/services"):
     if s["name"] not in used:
         continue
     preset = s.get("preset") or s["name"]
-    description = presets.get(preset) or custom_description(s["name"])
+    description = presets.get(preset, {}).get("description") or custom_description(s["name"])
+    # lerd leaves label out when neither the service nor its preset sets one;
+    # the dashboard then capitalizes the name, and so does this.
+    label = s.get("label") or presets.get(preset, {}).get("label") \
+        or " ".join(w.capitalize() for w in s["name"].split("-"))
     # Presets put a default login in their description as "(login: ...)".
     login = re.search(r"\s*\(login:\s*(.+?)\)", description)
     services.append({
         "name": s["name"],
+        "label": label,
         "status": s.get("status", ""),
         "category": s.get("category", ""),
         "color": s.get("color", ""),
         # ponytail: lerd secures every service domain it serves, so always https.
-        "address": f"https://{domains[s['name']]}" if s["name"] in domains
+        "address": f"https://{s['domain']}" if s.get("domain")
         else f"localhost:{s['port']}" if s.get("port") else "",
         "icon": icons.get(preset, ""),
         "description": description.replace(login.group(0), "") if login else description,

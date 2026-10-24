@@ -146,7 +146,7 @@
         icon.style.setProperty('--icon', 'url("data:image/svg+xml,' + encodeURIComponent(s.icon) + '")');
         node.append(icon);
       } else {
-        node.textContent = s.name.charAt(0).toUpperCase();
+        node.textContent = s.label.charAt(0).toUpperCase();
       }
       return node;
     }
@@ -154,7 +154,7 @@
     function card(s) {
       const [tone, label] = pills[s.status] || ['', s.status];
       const name = el('div', 'name');
-      name.append(el('strong', '', s.name));
+      name.append(el('strong', '', s.label));
       if (s.category) name.append(el('span', 'category lerd-muted', s.category));
       const title = el('div', 'title');
       title.append(mark(s), name, el('span', 'lerd-pill ' + tone, label));
