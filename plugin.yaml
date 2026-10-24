@@ -1,6 +1,6 @@
 api_version: 1
 name: site-services
-lerd: ">=1.37"
+lerd: ">=1.38"
 version: 0.1.0
 description: A site tab that describes every service the site uses
 docs: DOCS.md
